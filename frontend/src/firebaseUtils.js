@@ -58,42 +58,53 @@ export const signupUser = async (email, password, name) => {
 
   const isAdmin = email.toLowerCase() === 'admin@ramenterprise.com';
 
-  // Save to Firestore users collection
-  await setDoc(doc(db, 'users', user.uid), {
-    uid: user.uid,
-    email: email,
-    name: name,
-    isAdmin: isAdmin,
-    createdAt: new Date().toISOString(),
-  });
+  // Save to Firestore — non-blocking, don't fail signup if this fails
+  try {
+    await setDoc(doc(db, 'users', user.uid), {
+      uid: user.uid,
+      email: email,
+      name: name,
+      isAdmin: isAdmin,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn('Could not save user to Firestore:', err.message);
+    // Still return user — Auth account was created successfully
+  }
 
   return { uid: user.uid, email, name, isAdmin };
 };
 
 export const loginUser = async (email, password) => {
+  // Sign in with Firebase Auth
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
   const user = userCredential.user;
 
-  // Fetch profile from Firestore
-  const userDoc = await getDoc(doc(db, 'users', user.uid));
-  if (userDoc.exists()) {
-    const data = userDoc.data();
-    return { uid: user.uid, email: data.email, name: data.name, isAdmin: data.isAdmin || false };
-  }
+  // Try fetching profile from Firestore (document ID = uid)
+  try {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      return { uid: user.uid, email: data.email || user.email, name: data.name, isAdmin: data.isAdmin || false };
+    }
+  } catch (_) { /* Firestore rules may block — fallback below */ }
 
-  // Fallback — also try by uid field (old format)
-  const q = query(collection(db, 'users'), where('uid', '==', user.uid));
-  const snap = await getDocs(q);
-  if (!snap.empty) {
-    const data = snap.docs[0].data();
-    return { uid: user.uid, email: data.email, name: data.name, isAdmin: data.isAdmin || false };
-  }
+  // Fallback: query by uid field
+  try {
+    const q = query(collection(db, 'users'), where('uid', '==', user.uid));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const data = snap.docs[0].data();
+      return { uid: user.uid, email: data.email || user.email, name: data.name, isAdmin: data.isAdmin || false };
+    }
+  } catch (_) { /* ignore */ }
 
+  // Final fallback — use Firebase Auth profile
   return {
     uid: user.uid,
     email: user.email,
-    name: user.displayName || email.split('@')[0],
-    isAdmin: email.toLowerCase() === 'admin@ramenterprise.com',
+    name: user.displayName || user.email.split('@')[0],
+    isAdmin: user.email.toLowerCase() === 'admin@ramenterprise.com',
   };
 };
 

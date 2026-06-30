@@ -70,28 +70,25 @@ function App() {
   // ── Persistent Firebase Auth Listener ──
   useEffect(() => {
     const unsubscribe = onAuthStateChange((userData) => {
+      // If admin is already set via localStorage (hardcoded admin), don't override
+      const storedAdmin = localStorage.getItem("ram_is_admin") === "true";
+      const storedUser  = localStorage.getItem("ram_user");
+
       if (userData) {
         setUser(userData.name);
         setUserUid(userData.uid);
         setIsAdmin(userData.isAdmin || false);
-        if (userData.isAdmin) {
-          localStorage.setItem("ram_is_admin", "true");
-        } else {
-          localStorage.removeItem("ram_is_admin");
-        }
+        if (userData.isAdmin) localStorage.setItem("ram_is_admin", "true");
+        else localStorage.removeItem("ram_is_admin");
         if (userData.name) localStorage.setItem("ram_user", userData.name);
+      } else if (storedAdmin && storedUser) {
+        // Hardcoded admin — keep session
+        setUser(storedUser);
+        setIsAdmin(true);
       } else {
-        // Check if admin is logged in via hardcoded method
-        const storedAdmin = localStorage.getItem("ram_is_admin") === "true";
-        const storedUser  = localStorage.getItem("ram_user");
-        if (storedAdmin && storedUser) {
-          setUser(storedUser);
-          setIsAdmin(true);
-        } else {
-          setUser(null);
-          setUserUid(null);
-          setIsAdmin(false);
-        }
+        setUser(null);
+        setUserUid(null);
+        setIsAdmin(false);
       }
       setAuthLoading(false);
     });
@@ -103,10 +100,19 @@ function App() {
     const loadProducts = async () => {
       try {
         const firebaseProducts = await fetchProducts();
-        if (firebaseProducts.length > 0) {
-          setProducts(firebaseProducts);
+        // Only use Firebase products if they have proper data (name + price + image)
+        const validFirebaseProducts = (firebaseProducts || []).filter(
+          p => p.name && p.price && p.image && p.image.startsWith("http")
+        );
+        if (validFirebaseProducts.length > 0) {
+          // Merge: valid Firebase products + hardcoded products not already in Firebase
+          const fbNames = new Set(validFirebaseProducts.map(p => p.name?.toLowerCase().trim()));
+          const hardcodedExtras = ALL_PRODUCTS.filter(
+            p => !fbNames.has(p.name?.toLowerCase().trim())
+          );
+          setProducts([...validFirebaseProducts, ...hardcodedExtras]);
         } else {
-          // Fallback to hardcoded products
+          // No valid Firebase products → show all 40 hardcoded
           setProducts(ALL_PRODUCTS);
         }
       } catch (error) {
@@ -152,12 +158,11 @@ function App() {
     });
   }, []);
   const [activeView, setActiveView] = useState(() => {
-    // Will be properly set after auth loads
     const storedUser  = localStorage.getItem("ram_user");
     const storedAdmin = localStorage.getItem("ram_is_admin") === "true";
     if (storedAdmin && storedUser) return "admin";
     if (storedUser)                return "home";
-    return "login";
+    return "home"; // ✅ Guest users directly see products, no forced login
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [notification, setNotification]   = useState(null);
@@ -311,9 +316,10 @@ function App() {
   const handleAdminLogin = (name) => {
     setUser(name);
     setIsAdmin(true);
+    setAuthLoading(false); // ensure loading spinner stops
     localStorage.setItem("ram_user", name);
     localStorage.setItem("ram_is_admin", "true");
-    setActiveView("admin"); // directly to admin, skip home
+    setActiveView("admin");
   };
 
   const toggleWishlist = (product) => {
@@ -346,9 +352,10 @@ function App() {
           setIsAdmin(false);
           localStorage.setItem("ram_user", name);
           localStorage.removeItem("ram_is_admin");
-          handleNavigate("home"); // user → home
+          setActiveView("home");
+          window.scrollTo({ top: 0, behavior: "smooth" });
         }}
-        onAdminLogin={handleAdminLogin} // admin → admin panel directly
+        onAdminLogin={handleAdminLogin}
       />
     );
   } else if (activeView === "admin") {

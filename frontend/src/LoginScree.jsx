@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { signupUser, loginUser } from "./firebaseUtils";
 
+// Hardcoded admin credentials — frontend only, no sensitive backend data
 const ADMIN_EMAIL = "admin@ramenterprise.com";
 const ADMIN_PASS  = "admin@123";
 
@@ -28,12 +29,11 @@ function LoginScreen({ onLogin, onAdminLogin }) {
     try {
       // ── ADMIN LOGIN ──
       if (role === "admin") {
-        if (userEmail.toLowerCase() !== ADMIN_EMAIL) {
-          setError("Invalid admin email"); setLoading(false); return;
+        if (userEmail.toLowerCase().trim() !== ADMIN_EMAIL) {
+          setError("Invalid admin email"); return;
         }
-        // Admin uses hardcoded credentials (no Firebase Auth needed for admin)
-        if (userPass !== ADMIN_PASS) {
-          setError("Invalid admin password"); setLoading(false); return;
+        if (userPass.trim() !== ADMIN_PASS) {
+          setError("Invalid admin password"); return;
         }
         onAdminLogin("Admin");
         return;

@@ -61,10 +61,11 @@ const ProductCard = ({ product, onClick, onAddToCart, onBuyNow }) => {
         onClick={() => onClick(product)}
       >
         <img
-          src={product.image}
+          src={product.image || `https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=400&q=80`}
           alt={product.name}
           className="w-full h-full object-cover"
           loading="lazy"
+          onError={e => { e.target.src = "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=400&q=80"; }}
         />
 
         {/* gradient overlay on hover */}
