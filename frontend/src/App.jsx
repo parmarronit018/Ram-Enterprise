@@ -367,7 +367,7 @@ function App() {
     mainContent = (
       <AdminPanel
         orders={orderHistory}
-        products={products}
+        products={products.length > 0 ? products : ALL_PRODUCTS}
         setProducts={setProducts}
         adminName={user}
         onLogout={handleLogout}
